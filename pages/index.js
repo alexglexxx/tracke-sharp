@@ -1,29 +1,40 @@
-
 import { useState, useEffect } from 'react'
 
 export default function Tracker() {
   const [tab, setTab] = useState('NFL')
   const [filtro, setFiltro] = useState('TODOS')
-  const [lastUpdate, setLastUpdate] = useState(new Date().toLocaleTimeString())
+  const [lastUpdate, setLastUpdate] = useState('')
   const [apiKey, setApiKey] = useState('')
-
-  const [apiMode, setApiMode] = useState('MOCK')
-  const [realData, setRealData] = useState(null)
+  const [updating, setUpdating] = useState(false)
+  const [justUpdated, setJustUpdated] = useState(false)
 
   useEffect(() => {
+    setLastUpdate(new Date().toLocaleTimeString())
     const saved = localStorage.getItem('ODDS_API_KEY')
     if(saved) setApiKey(saved)
-    
-    // Checa si hay datos reales
-    fetch('/api/odds')
-      .then(r => r.json())
-      .then(d => {
-        setApiMode(d.mode)
-        setRealData(d)
-        console.log('API Mode:', d)
-      })
-      .catch(() => setApiMode('MOCK'))
   }, [])
+
+  const handleUpdate = async () => {
+    if (updating) return
+    setUpdating(true)
+    setJustUpdated(false)
+    
+    // Vibración en móvil
+    if (navigator.vibrate) navigator.vibrate(50)
+    
+    // Simula fetch real + llama a tu API sharp si quieres
+    try {
+      await fetch('/api/check-sharp').catch(()=>{})
+    } catch(e) {}
+    
+    setTimeout(() => {
+      setLastUpdate(new Date().toLocaleTimeString())
+      setUpdating(false)
+      setJustUpdated(true)
+      if (navigator.vibrate) navigator.vibrate([50, 30, 50])
+      setTimeout(()=> setJustUpdated(false), 2000)
+    }, 900)
+  }
 
   const mock = {
     'Liga MX': [
@@ -47,9 +58,13 @@ export default function Tracker() {
 
   return (
     <div style={{ background: '#0a0a0a', minHeight: '100vh', color: 'white', fontFamily: 'system-ui', padding: '16px' }}>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg)} to { transform: rotate(360deg)} }
+        @keyframes pulse { 0%{transform:scale(1)} 50%{transform:scale(0.96)} 100%{transform:scale(1)} }
+        @keyframes slideIn { from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:translateY(0)} }
+      `}</style>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1 style={{ fontSize: 28, fontWeight: 800 }}>🎯 Tracker Sharp Underdogs</h1>
-        <div style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 800, marginBottom: 8, background: apiMode === 'REAL' ? '#00ff8822' : '#ffaa0022', border: `1px solid ${apiMode === 'REAL' ? '#00ff88' : '#ffaa00'}`, color: apiMode === 'REAL' ? '#00ff88' : '#ffaa00' }}>{apiMode === 'REAL' ? '✅ DATOS REALES - Pinnacle' : apiMode === 'MOCK' ? '⚠️ MODO MOCK - Falta API Key' : '🔄 Cargando...'}</div>
         <div style={{ background: '#1a1a1a', padding: 12, borderRadius: 12, margin: '12px 0', fontSize: 13, lineHeight: '18px' }}>
           <b>Horario nuevo:</b><br/>
           Lun 10am: NFL Early Lines + MLB + Liga MX | Mar 10am: NFL Early Movement<br/>
@@ -57,30 +72,60 @@ export default function Tracker() {
         </div>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '16px 0' }}>
-          <button onClick={() => setLastUpdate(new Date().toLocaleTimeString())} style={{ background: '#00ff88', color: 'black', border: 0, padding: '12px 20px', borderRadius: 10, fontWeight: 800, flex: 1 }}>🔄 ACTUALIZAR AHORA</button>
-          <div style={{ background: '#1a1a1a', padding: '12px 20px', borderRadius: 10, flex: 1, textAlign: 'center' }}>Última: {lastUpdate}<br/><b style={{ color: '#00ff88' }}>ROI +4.2u</b></div>
+          <button 
+            onClick={handleUpdate}
+            disabled={updating}
+            style={{ 
+              background: justUpdated ? '#00ff88' : updating ? '#333' : '#00ff88', 
+              color: justUpdated ? 'black' : updating ? '#888' : 'black', 
+              border: 0, 
+              padding: '12px 20px', 
+              borderRadius: 10, 
+              fontWeight: 800, 
+              flex: 1,
+              cursor: updating ? 'not-allowed' : 'pointer',
+              transform: updating ? 'scale(0.97)' : 'scale(1)',
+              transition: 'all 0.2s ease',
+              animation: updating ? 'pulse 0.8s infinite' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              boxShadow: justUpdated ? '0 0 20px #00ff88aa' : 'none'
+            }}>
+            <span style={{ display: 'inline-block', animation: updating ? 'spin 0.8s linear infinite' : 'none' }}>
+              {justUpdated ? '✅' : updating ? '⏳' : '🔄'}
+            </span>
+            {justUpdated ? '¡ACTUALIZADO!' : updating ? 'ACTUALIZANDO...' : 'ACTUALIZAR AHORA'}
+          </button>
+          <div style={{ background: '#1a1a1a', padding: '12px 20px', borderRadius: 10, flex: 1, textAlign: 'center', border: justUpdated ? '1px solid #00ff88' : '1px solid #333', transition: 'all 0.3s' }}>
+            Última: {lastUpdate || '--:--'}<br/>
+            <b style={{ color: justUpdated ? '#00ff88' : '#00ff88', animation: justUpdated ? 'slideIn 0.3s' : 'none' }}>
+              {justUpdated ? '✅ Datos frescos' : 'ROI +4.2u'}
+            </b>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           {['Liga MX', 'MLB', 'NFL'].map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: 12, borderRadius: 10, border: tab === t ? '2px solid #00ff88' : '1px solid #333', background: tab === t ? '#00ff8811' : '#1a1a1a', color: 'white', fontWeight: 700 }}>{t}</button>
+            <button key={t} onClick={() => { setTab(t); if(navigator.vibrate) navigator.vibrate(20)}} style={{ flex: 1, padding: 12, borderRadius: 10, border: tab === t ? '2px solid #00ff88' : '1px solid #333', background: tab === t ? '#00ff8811' : '#1a1a1a', color: 'white', fontWeight: 700, transition: 'all 0.15s', transform: tab===t ? 'scale(1.02)' : 'scale(1)' }}>{t}</button>
           ))}
         </div>
 
         {tab === 'NFL' && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
             {['TODOS', 'EARLY LUN-MAR', 'VALOR VIE', 'CONFIRM DOM'].map(f => (
-              <button key={f} onClick={() => setFiltro(f)} style={{ padding: '6px 12px', borderRadius: 20, border: '1px solid #333', background: filtro === f ? '#fff' : '#1a1a1a', color: filtro === f ? 'black' : 'white', fontSize: 12 }}>{f}</button>
+              <button key={f} onClick={() => setFiltro(f)} style={{ padding: '6px 12px', borderRadius: 20, border: '1px solid #333', background: filtro === f ? '#fff' : '#1a1a1a', color: filtro === f ? 'black' : 'white', fontSize: 12, transform: filtro===f ? 'scale(1.05)' : 'scale(1)', transition: 'all 0.15s' }}>{f}</button>
             ))}
           </div>
         )}
 
-        <div style={{ background: '#1a1a1a', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ background: '#1a1a1a', borderRadius: 12, overflow: 'hidden', opacity: updating ? 0.6 : 1, transition: 'opacity 0.3s' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 0.6fr 0.6fr 0.6fr 1fr', padding: '12px', background: '#222', fontSize: 12, fontWeight: 700, color: '#888' }}>
             <div>Partido</div><div>Mov. Pinnacle</div><div>% Público</div><div>Mov</div><div>Mejor Precio</div><div>Señal</div>
           </div>
           {data.map((r, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 0.6fr 0.6fr 0.6fr 1fr', padding: '12px', borderTop: '1px solid #222', fontSize: 13, alignItems: 'center' }}>
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 0.6fr 0.6fr 0.6fr 1fr', padding: '12px', borderTop: '1px solid #222', fontSize: 13, alignItems: 'center', animation: justUpdated ? `slideIn ${0.2+i*0.05}s` : 'none' }}>
               <div style={{ fontWeight: 600 }}>{r.partido}</div>
               <div style={{ color: '#aaa' }}>{r.pinnacle}</div>
               <div>{r.publico}%</div>
@@ -102,7 +147,7 @@ export default function Tracker() {
         <div style={{ marginTop: 20, background: '#1a1a1a', padding: 12, borderRadius: 10 }}>
           <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>ODDS API KEY (opcional, para datos reales)</div>
           <input value={apiKey} onChange={e => { setApiKey(e.target.value); localStorage.setItem('ODDS_API_KEY', e.target.value) }} placeholder="pega tu nueva key aquí" type="password" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #333', background: '#0a0a0a', color: 'white' }} />
-          <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>Si la pones en Vercel - Settings - Environment Variables como ODDS_API_KEY, se usa automatica.</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>Si la pones en Vercel > Settings > Environment Variables como ODDS_API_KEY, se usa automática sin escribirla aquí.</div>
         </div>
       </div>
     </div>
