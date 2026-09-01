@@ -7,10 +7,22 @@ export default function Tracker() {
   const [lastUpdate, setLastUpdate] = useState(new Date().toLocaleTimeString())
   const [apiKey, setApiKey] = useState('')
 
+  const [apiMode, setApiMode] = useState('MOCK')
+  const [realData, setRealData] = useState(null)
+
   useEffect(() => {
-    // Lee de localStorage si el usuario la puso a mano
     const saved = localStorage.getItem('ODDS_API_KEY')
     if(saved) setApiKey(saved)
+    
+    // Checa si hay datos reales
+    fetch('/api/odds')
+      .then(r => r.json())
+      .then(d => {
+        setApiMode(d.mode)
+        setRealData(d)
+        console.log('API Mode:', d)
+      })
+      .catch(() => setApiMode('MOCK'))
   }, [])
 
   const mock = {
@@ -20,14 +32,14 @@ export default function Tracker() {
       { partido: 'Cruz Azul vs León', pinnacle: 'León +0.5 (se movió 0.6)', publico: 77, mov: -0.6, precio: '+155', senal: 'SHARP', tipo: 'VALOR VIE' },
     ],
     'MLB': [
-      { partido: 'Yankees vs Orioles', pinnacle: 'Orioles +160 -> +140', publico: 81, mov: -20, precio: '+145', senal: 'SHARP', tipo: 'VALOR VIE' },
-      { partido: 'Dodgers vs Rockies', pinnacle: 'Rockies +180 -> +165', publico: 79, mov: -15, precio: '+172', senal: '', tipo: 'VALOR VIE' },
+      { partido: 'Yankees vs Orioles', pinnacle: 'Orioles +160 → +140', publico: 81, mov: -20, precio: '+145', senal: 'SHARP', tipo: 'VALOR VIE' },
+      { partido: 'Dodgers vs Rockies', pinnacle: 'Rockies +180 → +165', publico: 79, mov: -15, precio: '+172', senal: '', tipo: 'VALOR VIE' },
     ],
     'NFL': [
-      { partido: 'Chiefs vs Chargers', pinnacle: 'Chargers +6.5 -> +6.0 (Pinnacle)', publico: 82, mov: -0.5, precio: '+185', senal: 'SHARP - EARLY', tipo: 'EARLY LUN-MAR' },
-      { partido: 'Cowboys vs Eagles', pinnacle: 'Eagles +3.5 -> +3.0', publico: 71, mov: -0.5, precio: '+145', senal: 'EARLY', tipo: 'EARLY LUN-MAR' },
-      { partido: '49ers vs Rams', pinnacle: 'Rams +7.0 -> +6.0', publico: 84, mov: -1.0, precio: '+210', senal: 'SHARP - VALOR VIE', tipo: 'VALOR VIE' },
-      { partido: 'Bills vs Dolphins', pinnacle: 'Dolphins +2.5 -> +1.5', publico: 78, mov: -1.0, precio: '+165', senal: 'SHARP - CONFIRM DOM', tipo: 'CONFIRM DOM' },
+      { partido: 'Chiefs vs Chargers', pinnacle: 'Chargers +6.5 → +6.0 (Pinnacle)', publico: 82, mov: -0.5, precio: '+185', senal: 'SHARP - EARLY', tipo: 'EARLY LUN-MAR' },
+      { partido: 'Cowboys vs Eagles', pinnacle: 'Eagles +3.5 → +3.0', publico: 71, mov: -0.5, precio: '+145', senal: 'EARLY', tipo: 'EARLY LUN-MAR' },
+      { partido: '49ers vs Rams', pinnacle: 'Rams +7.0 → +6.0', publico: 84, mov: -1.0, precio: '+210', senal: 'SHARP - VALOR VIE', tipo: 'VALOR VIE' },
+      { partido: 'Bills vs Dolphins', pinnacle: 'Dolphins +2.5 → +1.5', publico: 78, mov: -1.0, precio: '+165', senal: 'SHARP - CONFIRM DOM', tipo: 'CONFIRM DOM' },
     ]
   }
 
@@ -37,6 +49,7 @@ export default function Tracker() {
     <div style={{ background: '#0a0a0a', minHeight: '100vh', color: 'white', fontFamily: 'system-ui', padding: '16px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1 style={{ fontSize: 28, fontWeight: 800 }}>🎯 Tracker Sharp Underdogs</h1>
+        <div style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 800, marginBottom: 8, background: apiMode === 'REAL' ? '#00ff8822' : '#ffaa0022', border: `1px solid ${apiMode === 'REAL' ? '#00ff88' : '#ffaa00'}`, color: apiMode === 'REAL' ? '#00ff88' : '#ffaa00' }}>{apiMode === 'REAL' ? '✅ DATOS REALES - Pinnacle' : apiMode === 'MOCK' ? '⚠️ MODO MOCK - Falta API Key' : '🔄 Cargando...'}</div>
         <div style={{ background: '#1a1a1a', padding: 12, borderRadius: 12, margin: '12px 0', fontSize: 13, lineHeight: '18px' }}>
           <b>Horario nuevo:</b><br/>
           Lun 10am: NFL Early Lines + MLB + Liga MX | Mar 10am: NFL Early Movement<br/>
@@ -89,7 +102,7 @@ export default function Tracker() {
         <div style={{ marginTop: 20, background: '#1a1a1a', padding: 12, borderRadius: 10 }}>
           <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>ODDS API KEY (opcional, para datos reales)</div>
           <input value={apiKey} onChange={e => { setApiKey(e.target.value); localStorage.setItem('ODDS_API_KEY', e.target.value) }} placeholder="pega tu nueva key aquí" type="password" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #333', background: '#0a0a0a', color: 'white' }} />
-          <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>Si la pones en Vercel - Settings - Environment Variables como ODDS_API_KEY, se usa automatica.</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>Si la pones en Vercel > Settings > Environment Variables como ODDS_API_KEY, se usa automática sin escribirla aquí.</div>
         </div>
       </div>
     </div>
