@@ -1,53 +1,92 @@
-
 export default async function handler(req, res) {
   const league = (req.query.league || 'mlb').toLowerCase()
-  const urls = {
-    mlb: ['https://api.actionnetwork.com/web/v1/scoreboard/mlb', 'https://api.actionnetwork.com/web/v1/scoreboard/mlb?period=game'],
-    nfl: ['https://api.actionnetwork.com/web/v1/scoreboard/nfl?period=game', 'https://api.actionnetwork.com/web/v1/scoreboard/nfl']
+  const ODDS_KEY = process.env.ODDS_API_KEY;
+
+  const sportMap = {
+    mlb: 'baseball_mlb',
+    nfl: 'americanfootball_nfl'
   }
-  const fallbacks = {
-    mlb: [
-      { matchup: 'Yankees @ Dodgers', away: 'Yankees', home: 'Dodgers', publicTickets: 79, publicMoney: 54, divergence: true, sharpSide: 'Yankees', signal: 'SHARP MLB - 79% tickets pero solo 54% dinero', league: 'MLB' },
-      { matchup: 'Cubs @ Mets', away: 'Cubs', home: 'Mets', publicTickets: 74, publicMoney: 48, divergence: true, sharpSide: 'Cubs', signal: 'SHARP MLB - 74% tickets pero solo 48% dinero', league: 'MLB' },
-      { matchup: 'Astros @ Mariners', away: 'Astros', home: 'Mariners', publicTickets: 81, publicMoney: 59, divergence: true, sharpSide: 'Astros', signal: 'SHARP MLB - 81% tickets pero solo 59% dinero', league: 'MLB' }
-    ],
-    nfl: [
-      { matchup: 'Seahawks @ Patriots', away: 'Seahawks', home: 'Patriots', publicTickets: 78, publicMoney: 51, divergence: true, sharpSide: 'Seahawks', signal: 'SHARP NFL - 78% tickets pero solo 51% dinero', league: 'NFL' }
-    ]
-  }
+  const sportKey = sportMap[league] || 'baseball_mlb';
+
   try {
-    let rawGames = []
-    for (const url of (urls[league] || urls.mlb)) {
+    let games = []
+
+    // 1. Intentar traer juegos REALES de The Odds API (misma fuente que Telegram)
+    if (ODDS_KEY) {
       try {
-        const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.actionnetwork.com/' } })
-        const j = await r.json()
-        const cand = j.games || j.scoreboard?.games || []
-        if (cand.length > 0) { rawGames = cand; break }
-      } catch(e) {}
-    }
-    if (rawGames.length === 0) {
-      return res.status(200).json({ ok: true, source: `fallback-${league}`, league: league.toUpperCase(), games: fallbacks[league] || fallbacks.mlb })
-    }
-    const normalized = rawGames.map(g => {
-      const away = g.away_team?.display_name || g.away_team?.short_name || 'Away'
-      const home = g.home_team?.display_name || g.home_team?.short_name || 'Home'
-      if (away === 'Away' || home === 'Home') return null
-      const tickets = g.public_betting?.tickets_pct || Math.floor(68 + Math.random()*15)
-      const money = g.public_betting?.money_pct || Math.floor(tickets - 18)
-      const divergence = tickets >= 72 && money <= 62
-      return {
-        matchup: `${away} @ ${home}`, away, home,
-        publicTickets: Math.round(tickets), publicMoney: Math.round(money),
-        divergence, sharpSide: divergence ? away : null,
-        signal: divergence ? `SHARP - ${Math.round(tickets)}% tickets pero solo ${Math.round(money)}% dinero` : 'Sin valor',
-        league: league.toUpperCase()
+        const oddsUrl = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds/?apiKey=${ODDS_KEY}&regions=us&markets=h2h&oddsFormat=american&bookmakers=pinnacle,draftkings`;
+        const r = await fetch(oddsUrl);
+        const data = await r.json();
+        if (Array.isArray(data) && data.length > 0) {
+          games = data.map(g => ({
+            matchup: `${g.away_team} @ ${g.home_team}`,
+            away: g.away_team,
+            home: g.home_team,
+            commence_time: g.commence_time,
+            league: league.toUpperCase(),
+            publicTickets: null,
+            publicMoney: null,
+            divergence: false,
+            signal: 'Juego real de hoy - sin datos de tickets aún',
+            isReal: true
+          }))
+        }
+      } catch(e) {
+        console.log('Odds API error', e.message)
       }
-    }).filter(Boolean)
-    if (normalized.length === 0) {
-      return res.status(200).json({ ok: true, source: `fallback-${league}-filtered`, league: league.toUpperCase(), games: fallbacks[league] || fallbacks.mlb })
     }
-    return res.status(200).json({ ok: true, source: `action-${league}-live`, league: league.toUpperCase(), games: normalized })
+
+    // 2. Si Odds API no trajo nada, intentar Action Network solo para datos publicos
+    if (games.length === 0) {
+      const actionUrls = [
+        `https://api.actionnetwork.com/web/v1/scoreboard/${league}?period=game`,
+        `https://api.actionnetwork.com/web/v1/scoreboard/${league}`
+      ]
+      for (const url of actionUrls) {
+        try {
+          const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.actionnetwork.com/' } })
+          const j = await r.json()
+          const cand = j.games || j.scoreboard?.games || []
+          if (cand.length > 0) {
+            games = cand.map(g => {
+              const away = g.away_team?.display_name || g.away_team?.short_name
+              const home = g.home_team?.display_name || g.home_team?.short_name
+              if (!away || !home) return null
+              const tickets = g.public_betting?.tickets_pct
+              const money = g.public_betting?.money_pct
+              const divergence = tickets && money ? (tickets >= 72 && money <= 62) : false
+              return {
+                matchup: `${away} @ ${home}`, away, home,
+                publicTickets: tickets ? Math.round(tickets) : null,
+                publicMoney: money ? Math.round(money) : null,
+                divergence,
+                sharpSide: divergence ? away : null,
+                signal: divergence ? `SHARP - ${Math.round(tickets)}% tickets pero solo ${Math.round(money)}% dinero` : 'Juego real',
+                league: league.toUpperCase(),
+                isReal: true
+              }
+            }).filter(Boolean)
+            if (games.length > 0) break
+          }
+        } catch(e) {}
+      }
+    }
+
+    // 3. Si no hay juegos reales hoy, regresar VACIO (no falsos)
+    if (games.length === 0) {
+      return res.status(200).json({ 
+        ok: true, 
+        source: `real-${league}-empty`, 
+        league: league.toUpperCase(), 
+        games: [],
+        msg: 'No hay juegos reales hoy'
+      })
+    }
+
+    return res.status(200).json({ ok: true, source: `real-${league}-live`, league: league.toUpperCase(), games })
+
   } catch (e) {
-    return res.status(200).json({ ok: true, source: `fallback-${league}-error`, league: league.toUpperCase(), games: fallbacks[league] || fallbacks.mlb, error: e.message })
+    // En error, también vacio, no falsos
+    return res.status(200).json({ ok: true, source: `real-${league}-error`, league: league.toUpperCase(), games: [], error: e.message })
   }
 }
