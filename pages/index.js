@@ -19,10 +19,8 @@ export default function Tracker() {
     setUpdating(true)
     setJustUpdated(false)
     
-    // Vibración en móvil
     if (navigator.vibrate) navigator.vibrate(50)
     
-    // Simula fetch real + llama a tu API sharp si quieres
     try {
       await fetch('/api/check-sharp').catch(()=>{})
     } catch(e) {}
@@ -100,7 +98,7 @@ export default function Tracker() {
           </button>
           <div style={{ background: '#1a1a1a', padding: '12px 20px', borderRadius: 10, flex: 1, textAlign: 'center', border: justUpdated ? '1px solid #00ff88' : '1px solid #333', transition: 'all 0.3s' }}>
             Última: {lastUpdate || '--:--'}<br/>
-            <b style={{ color: justUpdated ? '#00ff88' : '#00ff88', animation: justUpdated ? 'slideIn 0.3s' : 'none' }}>
+            <b style={{ color: '#00ff88', animation: justUpdated ? 'slideIn 0.3s' : 'none' }}>
               {justUpdated ? '✅ Datos frescos' : 'ROI +4.2u'}
             </b>
           </div>
@@ -147,7 +145,7 @@ export default function Tracker() {
         <div style={{ marginTop: 20, background: '#1a1a1a', padding: 12, borderRadius: 10 }}>
           <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>ODDS API KEY (opcional, para datos reales)</div>
           <input value={apiKey} onChange={e => { setApiKey(e.target.value); localStorage.setItem('ODDS_API_KEY', e.target.value) }} placeholder="pega tu nueva key aquí" type="password" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #333', background: '#0a0a0a', color: 'white' }} />
-          <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>Si la pones en Vercel > Settings > Environment Variables como ODDS_API_KEY, se usa automática sin escribirla aquí.</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>Si la pones en Vercel en Settings Environment Variables como ODDS_API_KEY, se usa automática sin escribirla aquí.</div>
         </div>
       </div>
     </div>
