@@ -79,11 +79,6 @@ export default function Tracker() {
 
   return (
     <div style={{ background: '#0a0a0a', minHeight: '100vh', color: 'white', fontFamily: 'system-ui', padding: '16px' }}>
-      <style>{\`
-        @keyframes spin { from { transform: rotate(0deg)} to { transform: rotate(360deg)} }
-        @keyframes pulse { 0%{transform:scale(1)} 50%{transform:scale(0.96)} 100%{transform:scale(1)} }
-        @keyframes slideIn { from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:translateY(0)} }
-      \`}</style>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1 style={{ fontSize: 28, fontWeight: 800 }}>🎯 Tracker Sharp Underdogs - REAL</h1>
         <div style={{ background: '#1a1a1a', padding: 12, borderRadius: 12, margin: '12px 0', fontSize: 13, lineHeight: '18px' }}>
