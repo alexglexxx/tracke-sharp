@@ -102,7 +102,7 @@ export default function Tracker() {
         <div style={{ marginTop: 20, background: '#1a1a1a', padding: 12, borderRadius: 10 }}>
           <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>ODDS API KEY (opcional, para datos reales)</div>
           <input value={apiKey} onChange={e => { setApiKey(e.target.value); localStorage.setItem('ODDS_API_KEY', e.target.value) }} placeholder="pega tu nueva key aquí" type="password" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #333', background: '#0a0a0a', color: 'white' }} />
-          <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>Si la pones en Vercel > Settings > Environment Variables como ODDS_API_KEY, se usa automática sin escribirla aquí.</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>Si la pones en Vercel - Settings - Environment Variables como ODDS_API_KEY, se usa automatica.</div>
         </div>
       </div>
     </div>
