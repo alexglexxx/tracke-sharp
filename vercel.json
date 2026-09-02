@@ -1,12 +1,8 @@
 {
   "crons": [
-    {
-      "path": "/api/check-sharp-mlb",
-      "schedule": "0 16 * * *"
-    },
-    {
-      "path": "/api/check-sharp-mlb",
-      "schedule": "0 23 * * *"
-    }
+    { "path": "/api/check-sharp-mlb", "schedule": "0 16 * * 1" },
+    { "path": "/api/check-sharp-mlb", "schedule": "0 23 * * 5" },
+    { "path": "/api/check-sharp-mlb", "schedule": "0 16 * * 0" },
+    { "path": "/api/check-sharp-mlb", "schedule": "0 23 * * *" }
   ]
 }
