@@ -19,7 +19,6 @@ export default async function handler(req, res) {
         const games = await r.json();
         if (!Array.isArray(games) || games.length === 0) continue;
 
-        // Traer public betting REAL (si no hay, no inventar divergencia)
         let publicData = []
         try {
           const baseUrl = `https://${req.headers.host}`
@@ -34,23 +33,18 @@ export default async function handler(req, res) {
           const dk = game.bookmakers?.find(b => b.key === 'draftkings');
           if (!pinnacle) continue;
 
-          // Buscar public real
-          let pubInfo = publicData.find(p => 
+          let pubInfo = publicData.find(p =>
             p.matchup?.toLowerCase().includes(away.split(' ').pop().toLowerCase()) ||
             p.matchup?.toLowerCase().includes(home.split(' ').pop().toLowerCase())
           )
 
-          // Si no hay public real, intentar calcular divergencia por movimiento Pinnacle vs DraftKings
-          // SHARP = Pinnacle da mejor precio al underdog que DK = dinero inteligente en dog
           for (const market of pinnacle.markets) {
             for (const outcome of market.outcomes) {
               const price = outcome.price
               const point = outcome.point || 0
-              const isUnderdog = outcome.name !== home
-
+              const isUnderdog = outcome.name!== home
               if (!isUnderdog) continue
 
-              // Calcular movimiento Pinnacle vs DK
               let dkPrice = null, dkPoint = null
               if (dk) {
                 const dkMarket = dk.markets.find(m => m.key === market.key)
@@ -61,44 +55,41 @@ export default async function handler(req, res) {
                 }
               }
 
-              // Logica SHARP real (no marcar todos)
               let isSharp = false
               let tickets = pubInfo?.publicTickets || null
               let money = pubInfo?.publicMoney || null
               let signal = ''
 
-              // Caso 1: Tenemos public betting real con divergencia 78% tickets vs <60% dinero
+              // CASO 1: Public REAL 78%+ tickets vs <=62% dinero = SHARP REAL (ej: Commanders 84%/59%)
               if (pubInfo && pubInfo.publicTickets && pubInfo.publicMoney) {
-                const div = pubInfo.publicTickets >= 75 && pubInfo.publicMoney <= 62
+                const div = pubInfo.publicTickets >= 78 && pubInfo.publicMoney <= 62
                 if (div) {
                   if (cfg.label === 'MLB' && price >= cfg.minPrice && price <= cfg.maxPrice) {
                     isSharp = true
-                    signal = `SHARP - ${pubInfo.publicTickets}% tickets con fav pero solo ${pubInfo.publicMoney}% dinero - esta jornada`
+                    signal = `SHARP - Pinnacle ${price} vs DK ${dkPrice || 'N/A'} - ${pubInfo.publicTickets}% tickets fav / ${pubInfo.publicMoney}% dinero - esta jornada`
                   }
                   if (cfg.label === 'NFL' && point >= cfg.minPoint) {
                     isSharp = true
-                    signal = `SHARP - ${pubInfo.publicTickets}% tickets con fav pero solo ${pubInfo.publicMoney}% dinero - esta jornada`
+                    signal = `SHARP - Pinnacle ${point} ${price} vs DK ${dkPoint} ${dkPrice} - ${pubInfo.publicTickets}% tickets fav / ${pubInfo.publicMoney}% dinero - esta jornada`
                   }
                 }
-              } 
-              // Caso 2: No hay public, pero Pinnacle se movio hacia underdog vs DK (sharp steam)
-              else if (dkPrice !== null) {
-                // MLB: Pinnacle da +140 cuando DK da +155 = Pinnacle bajo precio = sharp en dog
+              }
+              // CASO 2: Sin public, STEAM REAL Pinnacle vs DK - SIN inventar %
+              else if (dkPrice!== null) {
                 if (cfg.label === 'MLB' && price >= cfg.minPrice && price <= cfg.maxPrice) {
-                  if (price < dkPrice - 8) { // Pinnacle 8 centavos mejor que DK
+                  if (dkPrice - price >= 12) {
                     isSharp = true
-                    tickets = 80 + Math.floor(Math.random()*5)
-                    money = 55 + Math.floor(Math.random()*6)
-                    signal = `SHARP - Pinnacle ${price} vs DK ${dkPrice} - steam hacia underdog - esta jornada`
+                    tickets = null; money = null
+                    signal = `STEAM SHARP - Pinnacle ${price > 0? '+'+price : price} vs DK ${dkPrice > 0? '+'+dkPrice : dkPrice} - esta jornada`
                   }
                 }
-                // NFL: solo si spread >=3.5 Y Pinnacle bajo linea vs DK = sharp real (no todos)
                 if (cfg.label === 'NFL' && point >= 3.5) {
-                  if ((dkPoint && point < dkPoint - 0.3) || (dkPrice && price < dkPrice - 8)) {
+                  const lineDiff = dkPoint!== null? dkPoint - point : 0
+                  const priceDiff = dkPrice!== null? dkPrice - price : 0
+                  if (lineDiff >= 0.5 || priceDiff >= 12) {
                     isSharp = true
-                    tickets = 80 + Math.floor(Math.random()*5)
-                    money = 55 + Math.floor(Math.random()*6)
-                    signal = `SHARP - Pinnacle ${point} ${price} vs DK ${dkPoint} ${dkPrice} - esta jornada`
+                    tickets = null; money = null
+                    signal = `STEAM SHARP - Pinnacle ${point} ${price} vs DK ${dkPoint} ${dkPrice} - esta jornada`
                   }
                 }
               }
@@ -108,12 +99,10 @@ export default async function handler(req, res) {
                   league: cfg.label,
                   game: `${away} @ ${home}`,
                   team: outcome.name,
-                  line: market.key === 'h2h' ? `${price > 0 ? '+' : ''}${price} ML` : `${point > 0 ? '+' : ''}${point} ${price > 0 ? '+' : ''}${price}`,
-                  tickets: tickets || 80,
-                  money: money || 55,
-                  signal: signal,
-                  price, point,
-                  jornada: cfg.jornada
+                  line: market.key === 'h2h'? `${price > 0? '+' : ''}${price} ML` : `${point > 0? '+' : ''}${point} ${price > 0? '+' : ''}${price}`,
+                  tickets, money, signal, price, point,
+                  jornada: cfg.jornada,
+                  isSteam: tickets === null
                 })
               }
             }
@@ -122,31 +111,32 @@ export default async function handler(req, res) {
       } catch(e) { console.log(`Error ${sportKey}`, e.message) }
     }
 
-    // Filtrar duplicados y solo top con mejor divergencia (max 6 para no spamear)
     const unique = []
     const seen = new Set()
     for (const a of allAlerts) {
       const key = a.game + a.team
-      if (!seen.has(key)) {
-        seen.add(key)
-        unique.push(a)
-      }
+      if (!seen.has(key)) { seen.add(key); unique.push(a) }
     }
-    // Ordenar por mayor divergencia tickets - dinero
-    unique.sort((a,b) => (b.tickets - b.money) - (a.tickets - a.money))
-    const finalAlerts = unique.slice(0, 6) // MAX 6 para que no marque toda la jornada
+    unique.sort((a,b) => {
+      if (a.tickets && b.tickets) return (b.tickets - b.money) - (a.tickets - a.money)
+      if (a.tickets &&!b.tickets) return -1
+      if (!a.tickets && b.tickets) return 1
+      return 0
+    })
+    const finalAlerts = unique.slice(0, 3)
 
     if (finalAlerts.length === 0) {
       return res.status(200).json({ ok: true, alerts: [], count: 0, msg: 'No SHARP esta jornada - vacio intencional', checked: ['MLB','NFL'] })
     }
 
-    let text = `🎯 *${finalAlerts.length} SHARP ${finalAlerts[0]?.jornada || 'esta jornada'}* 🎯\n\n`
+    let text = `🎯 *${finalAlerts.length} SHARP esta jornada* 🎯\n\n`
     for (const lg of ['MLB','NFL']) {
       const lgAlerts = finalAlerts.filter(a => a.league === lg)
       if (lgAlerts.length === 0) continue
       text += `*${lg}:*\n`
       lgAlerts.forEach((a,i) => {
-        text += `${i+1}. ${a.team} ${a.line}\n   ${a.game}\n   📊 ${a.tickets}% tickets / ${a.money}% dinero\n   ${a.signal}\n\n`
+        const stats = a.isSteam? `📊 STEAM Pinnacle vs DK` : `📊 ${a.tickets}% tickets / ${a.money}% dinero`
+        text += `${i+1}. ${a.team} ${a.line}\n ${a.game}\n ${stats}\n ${a.signal}\n\n`
       })
     }
     text += `🔗 https://tracke-sharp.vercel.app`
