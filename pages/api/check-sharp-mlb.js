@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   if (!ODDS_KEY) return res.status(500).json({ error: 'Falta ODDS_API_KEY' });
 
   const leagues = {
-    baseball_mlb: { label: 'MLB', minPrice: 135, maxPrice: 220, market: 'h2h', jornada: 'esta jornada' },
+    baseball_mlb: { label: 'MLB', minPrice: 100, maxPrice: 260, market: 'h2h', jornada: 'hoy' },
     americanfootball_nfl: { label: 'NFL', minPoint: 3, minPrice: 100, maxPrice: 350, market: 'spreads', jornada: 'esta jornada' }
   }
 
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
           const dk = game.bookmakers?.find(b => b.key === 'draftkings');
           if (!pinnacle) continue;
 
-          let pubInfo = publicData.find(p =>
+          let pubInfo = publicData.find(p => 
             p.matchup?.toLowerCase().includes(away.split(' ').pop().toLowerCase()) ||
             p.matchup?.toLowerCase().includes(home.split(' ').pop().toLowerCase())
           )
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
             for (const outcome of market.outcomes) {
               const price = outcome.price
               const point = outcome.point || 0
-              const isUnderdog = outcome.name!== home
+              const isUnderdog = outcome.name !== home
               if (!isUnderdog) continue
 
               let dkPrice = null, dkPoint = null
@@ -60,36 +60,39 @@ export default async function handler(req, res) {
               let money = pubInfo?.publicMoney || null
               let signal = ''
 
-              // CASO 1: Public REAL 78%+ tickets vs <=62% dinero = SHARP REAL (ej: Commanders 84%/59%)
-              if (pubInfo && pubInfo.publicTickets && pubInfo.publicMoney) {
-                const div = pubInfo.publicTickets >= 78 && pubInfo.publicMoney <= 62
-                if (div) {
-                  if (cfg.label === 'MLB' && price >= cfg.minPrice && price <= cfg.maxPrice) {
+              // MLB: MAS SENSIBLE - 70% tickets / 65% dinero o steam 8c
+              if (cfg.label === 'MLB') {
+                if (pubInfo && pubInfo.publicTickets && pubInfo.publicMoney) {
+                  const div = pubInfo.publicTickets >= 70 && pubInfo.publicMoney <= 65
+                  if (div && price >= cfg.minPrice && price <= cfg.maxPrice) {
                     isSharp = true
-                    signal = `SHARP - Pinnacle ${price} vs DK ${dkPrice || 'N/A'} - ${pubInfo.publicTickets}% tickets fav / ${pubInfo.publicMoney}% dinero - esta jornada`
+                    signal = `SHARP MLB - ${pubInfo.publicTickets}% tickets fav / ${pubInfo.publicMoney}% dinero - Pinnacle ${price} vs DK ${dkPrice || 'N/A'} - hoy`
                   }
-                  if (cfg.label === 'NFL' && point >= cfg.minPoint) {
+                } else if (dkPrice !== null && price >= cfg.minPrice && price <= cfg.maxPrice) {
+                  // Sin public, steam de 8 centavos ya es valor en MLB
+                  if (dkPrice - price >= 8) {
                     isSharp = true
-                    signal = `SHARP - Pinnacle ${point} ${price} vs DK ${dkPoint} ${dkPrice} - ${pubInfo.publicTickets}% tickets fav / ${pubInfo.publicMoney}% dinero - esta jornada`
+                    tickets = null; money = null
+                    signal = `STEAM MLB - Pinnacle ${price > 0? '+'+price : price} vs DK ${dkPrice > 0? '+'+dkPrice : dkPrice} - hoy`
                   }
                 }
               }
-              // CASO 2: Sin public, STEAM REAL Pinnacle vs DK - SIN inventar %
-              else if (dkPrice!== null) {
-                if (cfg.label === 'MLB' && price >= cfg.minPrice && price <= cfg.maxPrice) {
-                  if (dkPrice - price >= 12) {
+
+              // NFL: MANTIENE ESTRICTO 78%/62% o steam 0.5 linea / 12c
+              if (cfg.label === 'NFL') {
+                if (pubInfo && pubInfo.publicTickets && pubInfo.publicMoney) {
+                  const div = pubInfo.publicTickets >= 78 && pubInfo.publicMoney <= 62
+                  if (div && point >= cfg.minPoint) {
                     isSharp = true
-                    tickets = null; money = null
-                    signal = `STEAM SHARP - Pinnacle ${price > 0? '+'+price : price} vs DK ${dkPrice > 0? '+'+dkPrice : dkPrice} - esta jornada`
+                    signal = `SHARP NFL - Pinnacle ${point} ${price} vs DK ${dkPoint} ${dkPrice} - ${pubInfo.publicTickets}% / ${pubInfo.publicMoney}% - esta jornada`
                   }
-                }
-                if (cfg.label === 'NFL' && point >= 3.5) {
-                  const lineDiff = dkPoint!== null? dkPoint - point : 0
-                  const priceDiff = dkPrice!== null? dkPrice - price : 0
+                } else if (dkPrice !== null && point >= 3.5) {
+                  const lineDiff = dkPoint !== null? dkPoint - point : 0
+                  const priceDiff = dkPrice !== null? dkPrice - price : 0
                   if (lineDiff >= 0.5 || priceDiff >= 12) {
                     isSharp = true
                     tickets = null; money = null
-                    signal = `STEAM SHARP - Pinnacle ${point} ${price} vs DK ${dkPoint} ${dkPrice} - esta jornada`
+                    signal = `STEAM NFL - Pinnacle ${point} ${price} vs DK ${dkPoint} ${dkPrice} - esta jornada`
                   }
                 }
               }
@@ -123,13 +126,13 @@ export default async function handler(req, res) {
       if (!a.tickets && b.tickets) return 1
       return 0
     })
-    const finalAlerts = unique.slice(0, 3)
+    const finalAlerts = unique.slice(0, 6)
 
     if (finalAlerts.length === 0) {
-      return res.status(200).json({ ok: true, alerts: [], count: 0, msg: 'No SHARP esta jornada - vacio intencional', checked: ['MLB','NFL'] })
+      return res.status(200).json({ ok: true, alerts: [], count: 0, msg: 'No SHARP hoy - vacio intencional', checked: ['MLB','NFL'] })
     }
 
-    let text = `🎯 *${finalAlerts.length} SHARP esta jornada* 🎯\n\n`
+    let text = `🎯 *${finalAlerts.length} SHARP hoy* 🎯\n\n`
     for (const lg of ['MLB','NFL']) {
       const lgAlerts = finalAlerts.filter(a => a.league === lg)
       if (lgAlerts.length === 0) continue
