@@ -6,7 +6,7 @@ export default function Tracker() {
   const [lastUpdate, setLastUpdate] = useState('')
   const [updating, setUpdating] = useState(false)
   const [justUpdated, setJustUpdated] = useState(false)
-  const [realData, setRealData] = useState({ 'Liga MX': [], 'MLB': [], 'NFL': [] })
+  const [realData, setRealData] = useState({ 'MLB': [], 'NFL': [] })
   const [loading, setLoading] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
 
@@ -19,10 +19,10 @@ export default function Tracker() {
       const res = await fetch('/api/check-sharp-mlb')
       const j = await res.json()
       const alerts = j.alerts || []
-      const mapped = { 'Liga MX': [], 'MLB': [], 'NFL': [] }
+      const mapped = { 'MLB': [], 'NFL': [] }
       alerts.forEach(a => {
         const league = a.league || 'MLB'
-        const key = league === 'MLB'? 'MLB' : league === 'NFL'? 'NFL' : 'Liga MX'
+        const key = league === 'MLB'? 'MLB' : 'NFL'
         let tipo = 'VALOR VIE'
         if (key === 'NFL') {
           const pt = Math.abs(a.point || 0)
@@ -54,12 +54,14 @@ export default function Tracker() {
   }
 
   useEffect(() => {
-    // 0 consumo al abrir - solo cache local
     const cached = localStorage.getItem('sharp_cache')
     const cachedTime = localStorage.getItem('sharp_lastUpdate')
     if (cached) {
       try {
-        setRealData(JSON.parse(cached))
+        // Migración: si el cache viejo tenía Liga MX, lo limpiamos
+        const parsed = JSON.parse(cached)
+        if (parsed['Liga MX']) delete parsed['Liga MX']
+        setRealData(parsed)
         setLastUpdate(cachedTime || '')
         setHasLoaded(true)
       } catch(e){}
@@ -95,7 +97,7 @@ export default function Tracker() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {['Liga MX', 'MLB', 'NFL'].map(t => (
+          {['MLB', 'NFL'].map(t => (
             <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: 12, borderRadius: 10, border: tab === t? '2px solid #00ff88' : '1px solid #333', background: tab === t? '#00ff8811' : '#1a1a1a', color: 'white', fontWeight: 700 }}>{t}</button>
           ))}
         </div>
