@@ -33,7 +33,7 @@ export default async function handler(req, res) {
           const dk = game.bookmakers?.find(b => b.key === 'draftkings');
           if (!pinnacle) continue;
 
-          let pubInfo = publicData.find(p => 
+          let pubInfo = publicData.find(p =>
             p.matchup?.toLowerCase().includes(away.split(' ').pop().toLowerCase()) ||
             p.matchup?.toLowerCase().includes(home.split(' ').pop().toLowerCase())
           )
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
             for (const outcome of market.outcomes) {
               const price = outcome.price
               const point = outcome.point || 0
-              const isUnderdog = outcome.name !== home
+              const isUnderdog = outcome.name!== home
               if (!isUnderdog) continue
 
               let dkPrice = null, dkPoint = null
@@ -60,16 +60,14 @@ export default async function handler(req, res) {
               let money = pubInfo?.publicMoney || null
               let signal = ''
 
-              // MLB: MAS SENSIBLE - 70% tickets / 65% dinero o steam 8c
               if (cfg.label === 'MLB') {
                 if (pubInfo && pubInfo.publicTickets && pubInfo.publicMoney) {
                   const div = pubInfo.publicTickets >= 70 && pubInfo.publicMoney <= 65
                   if (div && price >= cfg.minPrice && price <= cfg.maxPrice) {
                     isSharp = true
-                    signal = `SHARP MLB - ${pubInfo.publicTickets}% tickets fav / ${pubInfo.publicMoney}% dinero - Pinnacle ${price} vs DK ${dkPrice || 'N/A'} - hoy`
+                    signal = `SHARP MLB - ${pubInfo.publicTickets}% tickets / ${pubInfo.publicMoney}% dinero - hoy`
                   }
-                } else if (dkPrice !== null && price >= cfg.minPrice && price <= cfg.maxPrice) {
-                  // Sin public, steam de 8 centavos ya es valor en MLB
+                } else if (dkPrice!== null && price >= cfg.minPrice && price <= cfg.maxPrice) {
                   if (dkPrice - price >= 8) {
                     isSharp = true
                     tickets = null; money = null
@@ -78,21 +76,20 @@ export default async function handler(req, res) {
                 }
               }
 
-              // NFL: MANTIENE ESTRICTO 78%/62% o steam 0.5 linea / 12c
               if (cfg.label === 'NFL') {
                 if (pubInfo && pubInfo.publicTickets && pubInfo.publicMoney) {
                   const div = pubInfo.publicTickets >= 78 && pubInfo.publicMoney <= 62
                   if (div && point >= cfg.minPoint) {
                     isSharp = true
-                    signal = `SHARP NFL - Pinnacle ${point} ${price} vs DK ${dkPoint} ${dkPrice} - ${pubInfo.publicTickets}% / ${pubInfo.publicMoney}% - esta jornada`
+                    signal = `SHARP - ${pubInfo.publicTickets}% tickets fav / ${pubInfo.publicMoney}% dinero - esta jornada`
                   }
-                } else if (dkPrice !== null && point >= 3.5) {
-                  const lineDiff = dkPoint !== null? dkPoint - point : 0
-                  const priceDiff = dkPrice !== null? dkPrice - price : 0
+                } else if (dkPrice!== null && point >= 3.5) {
+                  const lineDiff = dkPoint!== null? dkPoint - point : 0
+                  const priceDiff = dkPrice!== null? dkPrice - price : 0
                   if (lineDiff >= 0.5 || priceDiff >= 12) {
                     isSharp = true
                     tickets = null; money = null
-                    signal = `STEAM NFL - Pinnacle ${point} ${price} vs DK ${dkPoint} ${dkPrice} - esta jornada`
+                    signal = `STEAM - Pinnacle ${point > 0? '+'+point : point} ${price > 0? '+'+price : price} vs DK ${dkPoint} ${dkPrice > 0? '+'+dkPrice : dkPrice} - esta jornada`
                   }
                 }
               }
@@ -102,8 +99,9 @@ export default async function handler(req, res) {
                   league: cfg.label,
                   game: `${away} @ ${home}`,
                   team: outcome.name,
-                  line: market.key === 'h2h'? `${price > 0? '+' : ''}${price} ML` : `${point > 0? '+' : ''}${point} ${price > 0? '+' : ''}${price}`,
+                  line: market.key === 'h2h'? `${price > 0? '+' : ''}${price} ML` : `${point > 0? '+'+point : point} ${price > 0? '+'+price : price}`,
                   tickets, money, signal, price, point,
+                  dkPrice, dkPoint,
                   jornada: cfg.jornada,
                   isSteam: tickets === null
                 })
@@ -129,16 +127,16 @@ export default async function handler(req, res) {
     const finalAlerts = unique.slice(0, 6)
 
     if (finalAlerts.length === 0) {
-      return res.status(200).json({ ok: true, alerts: [], count: 0, msg: 'No SHARP hoy - vacio intencional', checked: ['MLB','NFL'] })
+      return res.status(200).json({ ok: true, alerts: [], count: 0, msg: 'No SHARP hoy', checked: ['MLB','NFL'] })
     }
 
-    let text = `🎯 *${finalAlerts.length} SHARP hoy* 🎯\n\n`
+    let text = `🎯 *${finalAlerts.length} SHARP* 🎯\n\n`
     for (const lg of ['MLB','NFL']) {
       const lgAlerts = finalAlerts.filter(a => a.league === lg)
       if (lgAlerts.length === 0) continue
       text += `*${lg}:*\n`
       lgAlerts.forEach((a,i) => {
-        const stats = a.isSteam? `📊 STEAM Pinnacle vs DK` : `📊 ${a.tickets}% tickets / ${a.money}% dinero`
+        const stats = a.isSteam? `📊 STEAM ${a.point? a.dkPoint+'->'+a.point : a.dkPrice+'->'+a.price}` : `📊 ${a.tickets}% / ${a.money}%`
         text += `${i+1}. ${a.team} ${a.line}\n ${a.game}\n ${stats}\n ${a.signal}\n\n`
       })
     }
@@ -150,7 +148,7 @@ export default async function handler(req, res) {
       } catch(e){}
     }
 
-    return res.status(200).json({ ok: true, sent: finalAlerts.length, alerts: finalAlerts, jornada: 'esta jornada' })
+    return res.status(200).json({ ok: true, sent: finalAlerts.length, alerts: finalAlerts })
 
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message })
