@@ -21,8 +21,7 @@ export default function Tracker() {
       const alerts = j.alerts || []
       const mapped = { 'MLB': [], 'NFL': [] }
       alerts.forEach(a => {
-        const league = a.league || 'MLB'
-        const key = league === 'MLB'? 'MLB' : 'NFL'
+        const key = a.league === 'MLB'? 'MLB' : 'NFL'
         let tipo = 'VALOR VIE'
         if (key === 'NFL') {
           const pt = Math.abs(a.point || 0)
@@ -30,11 +29,32 @@ export default function Tracker() {
           else if (pt >= 3) tipo = 'VALOR VIE'
           else tipo = 'CONFIRM DOM'
         }
+        // Calculo Mov real para STEAM
+        let movTexto = ''
+        let publicoTexto = ''
+        if (a.isSteam) {
+          publicoTexto = 'STEAM'
+          if (a.dkPoint!== null && a.point!== null && a.dkPoint!== a.point) {
+            const diff = (a.dkPoint - a.point).toFixed(1)
+            movTexto = `-${diff}`
+          } else if (a.dkPrice!== null) {
+            const diff = a.dkPrice - a.price
+            movTexto = `${diff > 0? '-' : '+'}${Math.abs(diff)}c`
+          } else {
+            movTexto = 'STEAM'
+          }
+        } else {
+          publicoTexto = `${a.tickets}%`
+          movTexto = `${a.money - a.tickets}`
+        }
+
         mapped[key].push({
           partido: a.game,
           pinnacle: a.line,
-          publico: a.tickets || (a.isSteam? 'STEAM' : '-'),
-          mov: a.tickets && a.money? (a.money - a.tickets) : 0,
+          publico: publicoTexto,
+          publicoFull: a.isSteam? `Pinnacle vs DK` : `${a.tickets}% tickets / ${a.money}% dinero`,
+          mov: movTexto,
+          movNum: a.isSteam? -1 : (a.money - a.tickets),
           precio: a.price > 0? '+'+a.price : ''+a.price,
           senal: a.isSteam? 'STEAM SHARP' : 'SHARP',
           tipo: tipo,
@@ -58,7 +78,6 @@ export default function Tracker() {
     const cachedTime = localStorage.getItem('sharp_lastUpdate')
     if (cached) {
       try {
-        // Migración: si el cache viejo tenía Liga MX, lo limpiamos
         const parsed = JSON.parse(cached)
         if (parsed['Liga MX']) delete parsed['Liga MX']
         setRealData(parsed)
@@ -79,20 +98,18 @@ export default function Tracker() {
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <h1 style={{ fontSize: 28, fontWeight: 800 }}>🎯 Tracker Sharp Underdogs</h1>
         <div style={{ background: '#1a1a1a', padding: 12, borderRadius: 12, margin: '12px 0', fontSize: 13, lineHeight: '18px', border: '1px solid #00ff8833' }}>
-          <b style={{ color: '#00ff88' }}>💰 Ahorro API: 0 consumo al abrir</b><br/>
-          Solo gasta al presionar ACTUALIZAR o crons programados<br/>
-          Lun 10am: NFL Early | Vie 5pm: Valor | Dom 10am: Confirm<br/>
+          <b style={{ color: '#00ff88' }}>💰 0 consumo al abrir</b><br/>
+          Solo gasta al presionar ACTUALIZAR<br/>
           <span style={{ color: '#888' }}>https://tracke-sharp.vercel.app</span>
         </div>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '16px 0' }}>
           <button onClick={fetchSharp} disabled={updating} style={{ background: justUpdated? '#00ff88' : updating? '#333' : '#00ff88', color: 'black', border: 0, padding: '14px 22px', borderRadius: 12, fontWeight: 900, flex: 1, cursor: updating? 'not-allowed' : 'pointer', fontSize: 15 }}>
-            {justUpdated? '✅ SHARP ACTUALIZADO' : updating? '⏳ BUSCANDO...' : '🔄 ACTUALIZAR AHORA (gasta 2 créditos)'}
+            {justUpdated? '✅ ACTUALIZADO' : updating? '⏳ BUSCANDO...' : '🔄 ACTUALIZAR AHORA'}
           </button>
           <div style={{ background: '#1a1a1a', padding: '12px 20px', borderRadius: 10, flex: 1, textAlign: 'center', border: justUpdated? '1px solid #00ff88' : '1px solid #333' }}>
             Última: {lastUpdate || 'nunca'}<br/>
-            <b style={{ color: hasLoaded? '#00ff88' : '#ffaa00' }}>{hasLoaded? `${filtered.length} SHARP cache` : 'Presiona actualizar'}</b><br/>
-            <span style={{ fontSize: 10, color: '#666' }}>{hasLoaded? 'Cache local - 0 créditos' : '0 créditos hasta actualizar'}</span>
+            <b style={{ color: hasLoaded? '#00ff88' : '#ffaa00' }}>{hasLoaded? `${filtered.length} SHARP` : 'Presiona actualizar'}</b>
           </div>
         </div>
 
@@ -103,30 +120,25 @@ export default function Tracker() {
         </div>
 
         <div style={{ background: '#1a1a1a', borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 0.6fr 0.6fr 0.6fr 1fr', padding: '12px', background: '#222', fontSize: 12, fontWeight: 700, color: '#888' }}>
-            <div>Partido (esta jornada)</div><div>Mov. Pinnacle</div><div>% Público</div><div>Mov</div><div>Mejor Precio</div><div>Señal</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 0.8fr 0.6fr 0.6fr 1fr', padding: '12px', background: '#222', fontSize: 12, fontWeight: 700, color: '#888' }}>
+            <div>Partido</div><div>Mov. Pinnacle</div><div>% Público</div><div>Mov</div><div>Precio</div><div>Señal</div>
           </div>
           {loading? (
-            <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>Buscando SHARP real... (2 créditos)</div>
+            <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>Buscando...</div>
           ) :!hasLoaded? (
             <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>
-              <div style={{ fontSize: 40, marginBottom: 10 }}>💰</div>
-              <b>0 créditos consumidos</b><br/>Presiona ACTUALIZAR para buscar SHARP reales<br/>
-              <span style={{ fontSize: 11 }}>Ej: Commanders +4 +103 @ Eagles - 84%/59%</span>
+              <b>Presiona ACTUALIZAR</b><br/>0 créditos al abrir
             </div>
           ) : filtered.length === 0? (
-            <div style={{ padding: 30, textAlign: 'center', color: '#888' }}>
-              No hay SHARP para {tab} esta jornada.<br/>Vacio intencional.<br/>
-              <span style={{ fontSize: 11 }}>Cache local - 0 créditos</span>
-            </div>
+            <div style={{ padding: 30, textAlign: 'center', color: '#888' }}>No hay SHARP para {tab}. Vacio intencional.</div>
           ) : filtered.map((r,i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 0.6fr 0.6fr 0.6fr 1fr', padding: '12px', borderTop: '1px solid #222', fontSize: 13, alignItems: 'center' }}>
-              <div style={{ fontWeight: 600 }}>{r.partido}<br/><span style={{ fontSize: 11, color: '#00ff88' }}>{r.team}</span><br/><span style={{ fontSize: 10, color: '#666' }}>{r.signalFull}</span></div>
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 0.8fr 0.6fr 0.6fr 1fr', padding: '12px', borderTop: '1px solid #222', fontSize: 13, alignItems: 'center' }}>
+              <div style={{ fontWeight: 600 }}>{r.partido}<br/><span style={{ fontSize: 11, color: '#00ff88' }}>{r.team}</span><br/><span style={{ fontSize: 9, color: '#888' }}>{r.signalFull}<br/>{r.publicoFull}</span></div>
               <div style={{ color: '#aaa', fontSize: 12 }}>{r.pinnacle}</div>
-              <div>{typeof r.publico === 'string'? r.publico : r.publico+'%'}</div>
-              <div style={{ color: r.mov < 0? '#00ff88' : '#ff5555' }}>{r.mov}</div>
+              <div style={{ fontWeight: 700, color: r.publico === 'STEAM'? '#ffaa00' : 'white' }}>{r.publico}</div>
+              <div style={{ color: r.movNum < 0? '#00ff88' : '#ff5555', fontWeight: 700 }}>{r.mov}</div>
               <div style={{ fontFamily: 'monospace', fontWeight: 700 }}>{r.precio}</div>
-              <div><span style={{ background: '#00ff8822', border: '1px solid #00ff88', color: '#00ff88', padding: '4px 8px', borderRadius: 20, fontSize: 11, fontWeight: 800 }}>{r.senal}</span></div>
+              <div><span style={{ background: r.publico === 'STEAM'? '#ffaa0022' : '#00ff8822', border: `1px solid ${r.publico === 'STEAM'? '#ffaa00' : '#00ff88'}`, color: r.publico === 'STEAM'? '#ffaa00' : '#00ff88', padding: '4px 8px', borderRadius: 20, fontSize: 10, fontWeight: 800 }}>{r.senal}</span></div>
             </div>
           ))}
         </div>
